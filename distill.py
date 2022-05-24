@@ -64,7 +64,7 @@ def main(args):
     student.summary()
     
     # Initialize and compile distiller
-    distiller = Distiller(student=student, teacher=teacher)
+    distiller = Distiller(cfg, student=student, teacher=teacher)
 
     distiller.compile(
         optimizer = tf.keras.optimizers.Adam(),

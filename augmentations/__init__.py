@@ -1,4 +1,3 @@
-import logging
 import numpy as np 
 
 from .augmentations import (
@@ -6,4 +5,3 @@ from .augmentations import (
     Compose,
 )
                     
-logger = logging.getLogger("monoflex.augmentations")

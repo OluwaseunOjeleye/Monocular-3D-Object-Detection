@@ -3,6 +3,8 @@ from tensorflow.keras.applications.resnet50 import ResNet50
 from tensorflow.keras import Input, Model
 from tensorflow.keras.layers import Dense, Flatten, AveragePooling2D, Dropout
 
+from model.head.detector_infer import make_post_processor
+
 
 # Change architecture of student model so it correlates with prediction of Monoflex
 def create_student(cfg, no_class):  
@@ -18,8 +20,10 @@ def create_student(cfg, no_class):
 
 
 class Distiller(tf.keras.Model):
-    def __init__(self, student, teacher):
+    def __init__(self, cfg, student, teacher):
         super(Distiller, self).__init__()
+        
+        self.post_processor = make_post_processor(cfg)
         self.teacher = teacher
         self.student = student
 
@@ -54,14 +58,14 @@ class Distiller(tf.keras.Model):
 
     def train(self, x, y):
         # Forward pass of teacher
-        teacher_predictions = self.teacher.Forward(x, training=False)
+        teacher_predictions = self.teacher.Forward(x, training=False) # Conv - Cls - 3 x 96 x 320, Reg - 50 x 96 x 320
 
         with tf.GradientTape() as tape:
             # Forward pass of student
-            student_predictions = self.student(x, training=True)
+            student_predictions = self.student(x, training=True)    # Conv - Cls - 3 x 96 x 320, Reg - 50 x 96 x 320
 
             # Compute losses
-            student_loss = self.student_loss_fn(y, student_predictions)
+            student_loss = self.student_loss_fn(y, (student_predictions))
             distillation_loss = self.distillation_loss_fn(
                 tf.nn.softmax(teacher_predictions / self.temperature, axis=1),
                 tf.nn.softmax(student_predictions / self.temperature, axis=1),
