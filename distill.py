@@ -1,7 +1,11 @@
 import os
 import datetime
+import torch
+from PIL import Image
+import numpy as np
 
 from datasets.kitti import KITTIDataset
+from datasets.kitti_utils import read_label
 from config import cfg
 from engine import (
     default_argument_parser,
@@ -38,11 +42,42 @@ def setup(args):
 
     return cfg
 
+def load_images(dataloader, trainingset_path, i_h, i_w, i_c):
+    m = 2 # len(dataloader)
+    # Define X and Y as number of images along with shape of one image
+    X = np.zeros((m, i_h, i_w, i_c), dtype=np.float32)
+    Y = []
+    Ground_truth = []
+
+    # Resize images and masks
+    for i in range(m):
+        file = dataloader.image_files[i][0:6]
+        
+        # convert image into an array of desired shape (3 channels)
+        path = os.path.join(trainingset_path + "image_2/", file + '.png')
+        single_img = Image.open(path).convert('RGB')
+        single_img = single_img.resize((i_h, i_w))
+        single_img = np.reshape(single_img,(i_h,i_w,i_c)) 
+        single_img = single_img/256.
+        X[i] = single_img
+
+        path = os.path.join(trainingset_path + "label_2/", file + '.txt')
+        Ground_truth.append(read_label(path))
+
+        # Load Teacher's predictions
+        # Y.append(torch.load(dataloader.image_files[i][0:6] + '_raw_cls.txt'))
+        
+    return X, Y, Ground_truth
+
 def main(args):
     cfg = setup(args)
 
     # Create x_train and y_train
     dataloader = KITTIDataset(cfg, "/home/oj10529w/Documents/DLCV/Project/Distill/training/", True, None, True)
+    X_train, Y_train, Ground_truth = load_images(dataloader, "/home/oj10529w/Documents/DLCV/Project/Distill/training/", cfg.INPUT.HEIGHT_TRAIN, cfg.INPUT.WIDTH_TRAIN, 3)
+
+    print(Ground_truth[0][0].print_object()+ "......")
+
     """ for i in range (len(dataloader)):
         img, target, original_idx = dataloader.__getitem__(i)
         calib = target.get_field("calib")
@@ -58,11 +93,30 @@ def main(args):
     """
 
     # Creating teacher and student model
-    teacher = create_student(cfg, 10)   # Change this to Monoflex pytorch Model
+    cls_files = []
 
-    student = create_student(cfg, 10)   # 
+    #for img_name in dataloader.image_files:
+    #    cls = torch.load(img_name[0:6] + '_raw_cls.txt')
+    #    cls_files.append(cls)
+
+    """ 
+    #print(cls_files)
+    teacher = create_student(cfg, 3)   # Change this to Monoflex pytorch Model
+
+    student = create_student(cfg, 3)   # 
     student.summary()
-    
+    print(X_train.shape)
+
+    student.compile(optimizer=tf.keras.optimizers.Adam(), 
+             loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+              metrics=['accuracy'])
+
+              
+    # Run the model in a mini-batch fashion and compute the progress for each epoch
+    # results = student.fit(X_train, batch_size=32, epochs=20)
+    results = student(X_train, training=True)
+    print(results.shape)
+
     # Initialize and compile distiller
     distiller = Distiller(cfg, student=student, teacher=teacher)
 
@@ -73,14 +127,14 @@ def main(args):
         distillation_loss_fn= tf.keras.losses.KLDivergence(),
         alpha=0.1,
         temperature=10,
-    )
+    ) """
 
     # Distill teacher to student
     # distiller.train(X_train, Y_train)
 
     # Evaluate student on test dataset
     # distiller.test(X_test, Y_test)
-
+    
     print(len(dataloader))
 
 
